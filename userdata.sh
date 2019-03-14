@@ -1,5 +1,7 @@
 #!/bin/bash
-MRH_WAR_URL=https://tomcat.apache.org/tomcat-7.0-doc/appdev/sample/sample.war
+WAR_URL=https://tomcat.apache.org/tomcat-7.0-doc/appdev/sample/sample.war
+S3_BUCKET_NAME=s3-log-bucketname
+AWS_REGION=eu-west-1
 JDK_FILENAME=java-11-amazon-corretto-devel-11.0.2.9-1.x86_64.rpm
 JDK_CHECKSUM="34ee8422ae5f5695c8052cbd7a57df8a"
 
@@ -26,8 +28,9 @@ sudo yum localinstall $JDK_FILENAME -y
 echo "Install tomcat8.5"
 sudo amazon-linux-extras install tomcat8.5 -y
 
+echo "Configure tomcat8.5"
 echo "Download and deploy webapp"
-wget "$MRH_WAR_URL" -P /usr/share/tomcat/webapps/
+wget "$WAR_URL" -P /usr/share/tomcat/webapps/
 
 echo "Install fluentd"
 curl -L https://toolbelt.treasuredata.com/sh/install-amazon2-td-agent3.sh | sudo sh
@@ -51,25 +54,21 @@ sudo tee /etc/td-agent/td-agent.conf <<EOL
 
 <match tomcat.logs>
   @type s3
-
-  s3_bucket toreplace___mrh_log_buck_name
-  s3_region eu-west-1
+  s3_bucket $S3_BUCKET_NAME
+  s3_region $AWS_REGION
   path logs/
   buffer_path /var/log/td-agent/s3
-
   time_slice_format %Y%m%d%H
   time_slice_wait 10m
   utc
-
   buffer_chunk_limit 256m
 </match>
 EOL
 
+echo "Set Tomcat as a auto-start service (via chkconfig)"
+chkconfig --add tomcat
+chkconfig tomcat on
 
-#sudo sed -i s/toreplace___mrh_log_buck_name/mrh-poc-log-bucket/g /etc/td-agent/td-agent.conf
-
-#echo "start fluentd"
-#sudo /etc/init.d/td-agent restart
-
-#echo "Start tomcat"
-#sudo tomcat restart
+echo "Set fluentd as a auto-start service (via chkconfig)"
+chkconfig --add td-agent
+chkconfig td-agent on
